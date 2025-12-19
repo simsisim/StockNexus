@@ -4,3 +4,4 @@ pandas
 plotly
 PyGithub
 bcrypt
+requests

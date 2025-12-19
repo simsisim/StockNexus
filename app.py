@@ -6,6 +6,8 @@ import bcrypt
 from github import Github
 import os
 import json
+import requests
+import re
 
 # --- Configuration ---
 DEFAULT_TICKER = "MU"
@@ -71,6 +73,57 @@ def save_json_to_github(new_data):
     except Exception as e:
         st.error(f"Error saving to GitHub: {e}")
         return False
+
+# --- Scraping Logic ---
+def scrape_zacks_data(ticker):
+    """Scrapes Zacks Rank, Style Scores, and Industry Rank."""
+    url = f"https://www.zacks.com/stock/quote/{ticker}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
+    info = []
+    try:
+        r = requests.get(url, headers=headers, timeout=5)
+        if r.status_code != 200:
+            return None
+            
+        text = r.text
+        
+        # 1. Zacks Rank
+        # Looking for: <p class="rank_view">1-Strong Buy<span...
+        rank_match = re.search(r'<p class="rank_view">\s*([0-9]-[a-zA-Z ]+)', text)
+        if rank_match:
+            info.append(f"Zacks Rank: {rank_match.group(1).strip()}")
+            
+        # 2. Style Scores
+        # Looking for: <p class="rank_view"><span class="composite_val">A</span> ... Value
+        # This is harder to regex cleanly in one go, but let's try a simpler approach
+        # Find "Style Scores" section
+        if "Style Scores" in text:
+            # Extract grades
+            scores = []
+            for style in ["Value", "Growth", "Momentum"]:
+                # Pattern: <span class="composite_val">A</span>&nbsp;Value
+                # or similar.
+                # Let's look for the letter before the style name
+                m = re.search(r'>([A-F])</span>&nbsp;' + style, text)
+                if m:
+                    scores.append(f"{style}: {m.group(1)}")
+            if scores:
+                info.append(" | ".join(scores))
+                
+        # 3. Industry Rank
+        # Pattern: <a ... class="status">Top 4% (10 out of 250)</a>
+        # Or just search for "Industry Rank" and get the next link text
+        # <p class="rank_view" ><a ... class="status">Top 1% (2 out of 252)</a>
+        ind_match = re.search(r'class="status">\s*(Top [0-9]+% \([0-9]+ out of [0-9]+\))', text)
+        if ind_match:
+            info.append(f"Ind: {ind_match.group(1)}")
+            
+        return "\n".join(info)
+    except Exception as e:
+        print(f"Scrape error: {e}")
+        return None
 
 # --- Main App ---
 st.set_page_config(page_title="StockNexus", layout="wide", page_icon="📈")
@@ -202,6 +255,16 @@ with st.expander("🔒 Admin: Edit Analysis"):
                 "news": {"other_news": []}, "metrics": {"revisions": []}, "ai_stats": {}
             }
             
+        # Auto-Fetch Button
+        if st.button("✨ Auto-Fetch Zacks Data"):
+            with st.spinner("Scraping Zacks..."):
+                zacks_info = scrape_zacks_data(ticker)
+                if zacks_info:
+                    edit_data["metrics"]["rank_info"] = zacks_info
+                    st.success("Fetched Zacks Rank!")
+                else:
+                    st.error("Could not fetch data. Check ticker or try again.")
+
         with st.form("edit_form"):
             edit_data["company_name"] = st.text_input("Company Name", edit_data.get("company_name", ""))
             
@@ -216,7 +279,9 @@ with st.expander("🔒 Admin: Edit Analysis"):
                 
             with c2:
                 st.subheader("Right Column")
-                edit_data["metrics"]["rank_info"] = st.text_input("Rank Info", edit_data["metrics"].get("rank_info", ""))
+                # Rank Info (might be populated by auto-fetch)
+                edit_data["metrics"]["rank_info"] = st.text_area("Rank Info", edit_data["metrics"].get("rank_info", ""))
+                
                 edit_data["metrics"]["earnings_trend"] = st.text_input("Earnings Trend", edit_data["metrics"].get("earnings_trend", ""))
                 edit_data["metrics"]["valuation"] = st.text_input("Valuation", edit_data["metrics"].get("valuation", ""))
                 
