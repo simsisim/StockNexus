@@ -1,0 +1,61 @@
+{
+    "MU": {
+        "company_name": "Micron Technology Inc.",
+        "segments": {
+            "top_left": {
+                "title": "DRAM",
+                "content": "Demand - Price - Market Share"
+            },
+            "mid_left": {
+                "title": "HBM",
+                "content": "Demand - Price - Market Share"
+            }
+        },
+        "product_mix": "DRAM/HBM/3D NAND/NVMe SSD",
+        "main_customers": {
+            "col1": {
+                "title": "HBM",
+                "names": [
+                    "NVDA",
+                    "AMD",
+                    "GOOGLE",
+                    "INTEL",
+                    "Supercomputing ctrs"
+                ]
+            },
+            "col2": {
+                "title": "DRAM",
+                "names": [
+                    "APPLE",
+                    "AMAZON",
+                    "SAMSUNG",
+                    "MSFT",
+                    "DELL"
+                ]
+            }
+        },
+        "news": {
+            "main_customer_news": "Main Customer News placeholder...",
+            "other_news": [
+                "Competitor",
+                "Partnerships"
+            ]
+        },
+        "metrics": {
+            "rank_info": "ZACKS RANK INFO placeholder",
+            "earnings_trend": "Earnings / Sales Trend placeholder",
+            "revisions": [
+                "1 wk",
+                "30 days",
+                "60 days..."
+            ],
+            "valuation": "Valuation placeholder"
+        },
+        "ai_stats": {
+            "megatrend": "Artificial Intelligence",
+            "moat": "Memory Leadership",
+            "bottleneck": "HBM, DRAM",
+            "exposure": "60%"
+        }
+    }
+}
