@@ -75,6 +75,7 @@ def save_json_to_github(new_data):
         return False
 
 # --- Scraping Logic ---
+@st.cache_data(ttl=3600) # Cache for 1 hour
 def scrape_zacks_data(ticker):
     """Scrapes Zacks Rank, Style Scores, and Industry Rank."""
     url = f"https://www.zacks.com/stock/quote/{ticker}"
@@ -90,22 +91,14 @@ def scrape_zacks_data(ticker):
         text = r.text
         
         # 1. Zacks Rank
-        # Looking for: <p class="rank_view">1-Strong Buy<span...
         rank_match = re.search(r'<p class="rank_view">\s*([0-9]-[a-zA-Z ]+)', text)
         if rank_match:
             info.append(f"Zacks Rank: {rank_match.group(1).strip()}")
             
         # 2. Style Scores
-        # Looking for: <p class="rank_view"><span class="composite_val">A</span> ... Value
-        # This is harder to regex cleanly in one go, but let's try a simpler approach
-        # Find "Style Scores" section
         if "Style Scores" in text:
-            # Extract grades
             scores = []
             for style in ["Value", "Growth", "Momentum"]:
-                # Pattern: <span class="composite_val">A</span>&nbsp;Value
-                # or similar.
-                # Let's look for the letter before the style name
                 m = re.search(r'>([A-F])</span>&nbsp;' + style, text)
                 if m:
                     scores.append(f"{style}: {m.group(1)}")
@@ -113,9 +106,6 @@ def scrape_zacks_data(ticker):
                 info.append(" | ".join(scores))
                 
         # 3. Industry Rank
-        # Pattern: <a ... class="status">Top 4% (10 out of 250)</a>
-        # Or just search for "Industry Rank" and get the next link text
-        # <p class="rank_view" ><a ... class="status">Top 1% (2 out of 252)</a>
         ind_match = re.search(r'class="status">\s*(Top [0-9]+% \([0-9]+ out of [0-9]+\))', text)
         if ind_match:
             info.append(f"Ind: {ind_match.group(1)}")
@@ -134,6 +124,10 @@ data = load_data()
 
 # --- Public View: Analysis Dashboard ---
 st.title(f"Analysis: {ticker}")
+
+# Always try to scrape live data for the public view
+with st.spinner("Fetching latest data..."):
+    live_zacks_info = scrape_zacks_data(ticker)
 
 if ticker in data:
     t_data = data[ticker]
@@ -206,7 +200,12 @@ if ticker in data:
         
         with st.container(border=True):
             st.markdown("**Rank Info**")
-            st.write(metrics.get("rank_info", ""))
+            # Use live data if available, otherwise fallback to stored
+            if live_zacks_info:
+                st.write(live_zacks_info)
+                st.caption("✅ Live from Zacks")
+            else:
+                st.write(metrics.get("rank_info", ""))
             
         with st.container(border=True):
             st.markdown("**Earnings / Sales Trend**")
