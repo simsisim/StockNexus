@@ -27,6 +27,10 @@ def check_password():
         """Checks whether a password entered by the user is correct."""
         if st.session_state["username"] in USERS and st.session_state["password"]:
             stored_hash = USERS[st.session_state["username"]]
+            # Ensure the hash is bytes, as st.secrets returns strings
+            if isinstance(stored_hash, str):
+                stored_hash = stored_hash.encode('utf-8')
+            
             if bcrypt.checkpw(st.session_state["password"].encode(), stored_hash):
                 st.session_state["password_correct"] = True
                 del st.session_state["password"]  # Don't store the password
