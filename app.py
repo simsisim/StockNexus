@@ -132,8 +132,102 @@ with st.spinner("Fetching latest data..."):
 if ticker in data:
     t_data = data[ticker]
     
-    # Layout: 3 Columns (Left Info, Center Chart/News, Right Metrics)
-    col1, col2, col3 = st.columns([1, 1.5, 1])
+    # --- TOP ROW: Chart & Key Data ---
+    top_c1, top_c2 = st.columns([2.5, 1])
+    
+    # Initialize stock object for both columns
+    try:
+        stock = yf.Ticker(ticker)
+    except:
+        stock = None
+
+    with top_c1:
+        # Timeframe Selector
+        timeframe = st.pills("Range", ["1M", "3M", "6M", "YTD", "1Y", "3Y", "5Y"], default="1Y", selection_mode="single")
+        
+        # Map to yfinance periods
+        period_map = {
+            "1M": "1mo", "3M": "3mo", "6M": "6mo", "YTD": "ytd",
+            "1Y": "1y", "3Y": "5y", "5Y": "5y"
+        }
+        yf_period = period_map.get(timeframe, "1y")
+
+        # Price Chart
+        if stock:
+            try:
+                hist = stock.history(period=yf_period)
+                # Filter for 3Y manually
+                if timeframe == "3Y" and not hist.empty:
+                    cutoff = pd.Timestamp.now(tz=hist.index.tz) - pd.DateOffset(years=3)
+                    hist = hist[hist.index >= cutoff]
+
+                if not hist.empty:
+                    fig = go.Figure()
+                    fig.add_trace(go.Scatter(x=hist.index, y=hist['Close'], mode='lines', name='Close'))
+                    fig.update_layout(
+                        height=400, # Increased height
+                        margin=dict(l=0, r=0, t=10, b=0),
+                        xaxis_title=None,
+                        yaxis_title=None
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.warning(f"No data found for {ticker}.")
+            except Exception as e:
+                st.error(f"Chart error: {e}")
+        else:
+            st.error("Ticker not found")
+
+    with top_c2:
+        # Key Data (Yahoo Finance)
+        with st.container(border=True):
+            st.markdown("**Key Data**")
+            if stock:
+                try:
+                    info = stock.info
+                    
+                    def fmt_num(n):
+                        if n is None: return "N/A"
+                        if n >= 1e12: return f"{n/1e12:.2f} T"
+                        if n >= 1e9: return f"{n/1e9:.2f} B"
+                        if n >= 1e6: return f"{n/1e6:.2f} M"
+                        return f"{n:,.2f}"
+
+                    def fmt_range(low, high):
+                        if low is None or high is None: return "N/A"
+                        return f"{low:,.2f} - {high:,.2f}"
+
+                    col_a, col_b = st.columns(2)
+                    
+                    with col_a:
+                        st.caption("Open")
+                        st.write(f"{info.get('open', 'N/A')}")
+                        st.caption("52-Wk Range")
+                        st.write(fmt_range(info.get('fiftyTwoWeekLow'), info.get('fiftyTwoWeekHigh')))
+                        st.caption("Market Cap")
+                        st.write(fmt_num(info.get('marketCap')))
+                        
+                    with col_b:
+                        st.caption("Day Range")
+                        st.write(fmt_range(info.get('dayLow'), info.get('dayHigh')))
+                        st.caption("Beta")
+                        st.write(f"{info.get('beta', 'N/A')}")
+                        st.caption("Dividend")
+                        div = info.get('dividendRate')
+                        yield_pct = info.get('dividendYield')
+                        if div:
+                            st.write(f"{div} ({yield_pct*100:.2f}%)")
+                        else:
+                            st.write("N/A")
+                except:
+                    st.error("Data unavailable")
+            else:
+                st.write("N/A")
+
+    st.divider()
+
+    # --- BOTTOM ROW: Analysis Columns ---
+    col1, col2, col3 = st.columns([1, 1, 1])
     
     # --- Column 1: Segments & Customers ---
     with col1:
@@ -170,44 +264,8 @@ if ticker in data:
                 for c in cust.get('col2', {}).get('names', []):
                     st.text(c)
 
-    # --- Column 2: Chart & News ---
+    # --- Column 2: News (Moved from old layout) ---
     with col2:
-        # Timeframe Selector
-        timeframe = st.pills("Range", ["1M", "3M", "6M", "YTD", "1Y", "3Y", "5Y"], default="1Y", selection_mode="single")
-        
-        # Map to yfinance periods
-        period_map = {
-            "1M": "1mo", "3M": "3mo", "6M": "6mo", "YTD": "ytd",
-            "1Y": "1y", "3Y": "5y", "5Y": "5y" # yf doesn't have 3y, use 5y and slice or just 5y
-        }
-        yf_period = period_map.get(timeframe, "1y")
-
-        # Price Chart
-        try:
-            stock = yf.Ticker(ticker)
-            hist = stock.history(period=yf_period)
-            
-            # Filter for 3Y manually if needed since yf uses 5y
-            if timeframe == "3Y" and not hist.empty:
-                cutoff = pd.Timestamp.now(tz=hist.index.tz) - pd.DateOffset(years=3)
-                hist = hist[hist.index >= cutoff]
-
-            if not hist.empty:
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(x=hist.index, y=hist['Close'], mode='lines', name='Close'))
-                fig.update_layout(
-                    height=350, 
-                    margin=dict(l=0, r=0, t=10, b=0),
-                    xaxis_title=None,
-                    yaxis_title=None
-                )
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.warning(f"No data found for {ticker}.")
-        except:
-            st.error("Chart unavailable")
-            
-        # News
         with st.container(border=True):
             st.markdown("**Main Customer News**")
             st.write(t_data.get("news", {}).get("main_customer_news", ""))
@@ -219,55 +277,6 @@ if ticker in data:
 
     # --- Column 3: Metrics & AI Stats ---
     with col3:
-        # Key Data (Yahoo Finance)
-        with st.container(border=True):
-            st.markdown("**Key Data**")
-            try:
-                info = stock.info
-                
-                # Helper to format large numbers
-                def fmt_num(n):
-                    if n is None: return "N/A"
-                    if n >= 1e12: return f"{n/1e12:.2f} T"
-                    if n >= 1e9: return f"{n/1e9:.2f} B"
-                    if n >= 1e6: return f"{n/1e6:.2f} M"
-                    return f"{n:,.2f}"
-
-                # Helper for ranges
-                def fmt_range(low, high):
-                    if low is None or high is None: return "N/A"
-                    return f"{low:,.2f} - {high:,.2f}"
-
-                col_a, col_b = st.columns(2)
-                
-                with col_a:
-                    st.caption("Open")
-                    st.write(f"{info.get('open', 'N/A')}")
-                    
-                    st.caption("52-Wk Range")
-                    st.write(fmt_range(info.get('fiftyTwoWeekLow'), info.get('fiftyTwoWeekHigh')))
-                    
-                    st.caption("Market Cap")
-                    st.write(fmt_num(info.get('marketCap')))
-                    
-                with col_b:
-                    st.caption("Day Range")
-                    st.write(fmt_range(info.get('dayLow'), info.get('dayHigh')))
-                    
-                    st.caption("Beta")
-                    st.write(f"{info.get('beta', 'N/A')}")
-                    
-                    st.caption("Dividend")
-                    div = info.get('dividendRate')
-                    yield_pct = info.get('dividendYield')
-                    if div:
-                        st.write(f"{div} ({yield_pct*100:.2f}%)")
-                    else:
-                        st.write("N/A")
-                        
-            except Exception as e:
-                st.error("Could not load key data")
-
         metrics = t_data.get("metrics", {})
         
         with st.container(border=True):
