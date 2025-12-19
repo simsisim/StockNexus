@@ -13,33 +13,43 @@ CSV_FILE = "user_data.csv"
 REPO_NAME = "StockNexus" # This should match your GitHub repo name if possible, or be configurable
 
 # --- Authentication ---
+# Load users from secrets
+# Structure in secrets.toml:
+# [passwords]
+# admin = "hash..."
+# user1 = "hash..."
+USERS = st.secrets["passwords"]
+
 def check_password():
     """Returns `True` if the user had the correct password."""
 
     def password_entered():
         """Checks whether a password entered by the user is correct."""
-        if st.session_state["password"]:
-            # Compare the entered password with the stored hash
-            # The hash below is for 'admin123' - REPLACE THIS IN PRODUCTION
-            stored_hash = b'$2b$12$tnGA3Q3Kkh5Tn2/BNqtwY.E7GUrDwCrmXQeuKeNLe/S5D6SZVgOc6' 
+        if st.session_state["username"] in USERS and st.session_state["password"]:
+            stored_hash = USERS[st.session_state["username"]]
             if bcrypt.checkpw(st.session_state["password"].encode(), stored_hash):
                 st.session_state["password_correct"] = True
                 del st.session_state["password"]  # Don't store the password
+                del st.session_state["username"]
             else:
                 st.session_state["password_correct"] = False
+        else:
+            st.session_state["password_correct"] = False
 
     if "password_correct" not in st.session_state:
         # First run, show input for password
+        st.text_input("Username", key="username")
         st.text_input(
             "Password", type="password", on_change=password_entered, key="password"
         )
         return False
     elif not st.session_state["password_correct"]:
         # Password incorrect, show input again
+        st.text_input("Username", key="username")
         st.text_input(
             "Password", type="password", on_change=password_entered, key="password"
         )
-        st.error("😕 Password incorrect")
+        st.error("😕 User not known or password incorrect")
         return False
     else:
         # Password correct

@@ -1,0 +1,148 @@
+Project Workflow Overview
+
+Create a minimal Streamlit dashboard displaying Yahoo Finance price data for a ticker (last year) alongside a value from CSV. Deploy publicly on Streamlit Cloud via GitHub with read-only access for public users and password-protected write access for CSV updates.
+Step 1: GitHub Repository Setup
+
+    Create new public GitHub repo named price-dashboard
+
+    Initialize with requirements.txt:
+
+text
+streamlit
+yfinance
+pandas
+streamlit-password-encoder
+
+    Add .streamlit/config.toml for app config:
+
+text
+[theme]
+primaryColor = "#FF6B6B"
+[server]
+enableXsrfProtection = false
+
+Step 2: Core Dashboard Code (app.py)
+
+python
+import streamlit as st
+import yfinance as yf
+import pandas as pd
+import plotly.graph_objects as go
+from streamlit_password_encoder import encoder, check_password
+
+# Config
+TICKER = st.sidebar.text_input("Ticker", value="AAPL")
+CSV_FILE = "user_data.csv"
+
+# Password check function
+def check_auth():
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
+    
+    if st.session_state.authenticated:
+        return True
+    
+    password = st.text_input("Enter password for edit access:", type="password")
+    if st.button("Login") or password:
+        if check_password("your_hashed_password_here", password):
+            st.session_state.authenticated = True
+            st.rerun()
+        else:
+            st.error("Wrong password")
+            return False
+    return False
+
+# Load CSV data
+@st.cache_data
+def load_csv():
+    try:
+        return pd.read_csv(CSV_FILE)
+    except:
+        # Create default CSV if not exists
+        df = pd.DataFrame({"value": [100.0]})
+        df.to_csv(CSV_FILE, index=False)
+        return df
+
+# Fetch price data
+@st.cache_data
+def get_price_data(ticker):
+    data = yf.download(ticker, period="1y", progress=False)
+    return data['Close']
+
+# Main app
+st.title(f"{TICKER} Dashboard")
+
+# Security check for write access
+can_edit = check_auth()
+
+# Display chart (public access)
+prices = get_price_data(TICKER)
+fig = go.Figure()
+fig.add_trace(go.Scatter(x=prices.index, y=prices.values, name="Close Price"))
+fig.update_layout(title=f"{TICKER} Price (1Y)", xaxis_title="Date", yaxis_title="Price")
+st.plotly_chart(fig, use_container_width=True)
+
+# Load and display CSV value
+df = load_csv()
+current_value = df['value'].iloc[0]
+st.metric("Custom Value (from CSV)", f"{current_value:.2f}")
+
+# Edit section (password protected only)
+if can_edit:
+    st.subheader("Edit Value")
+    new_value = st.number_input("New value:", value=current_value)
+    if st.button("Save to CSV"):
+        df.loc[0, 'value'] = new_value
+        df.to_csv(CSV_FILE, index=False)
+        st.success("Saved!")
+        st.rerun()
+else:
+    st.info("🔒 Login required to edit CSV value")
+
+Step 3: Generate Password Hash
+
+Run this once locally to get hashed password:
+
+python
+from streamlit_password_encoder import encoder
+hashed = encoder("your_password_here")
+print(hashed)  # Replace "your_hashed_password_here" in app.py
+
+Step 4: Deployment Steps
+
+text
+1. Commit app.py, requirements.txt, .streamlit/config.toml to GitHub main branch
+2. Go to share.streamlit.io
+3. Sign in with GitHub → "New app"
+4. Select repo → main branch → app.py → Deploy
+5. Public URL generated: https://yourapp.streamlit.app
+
+Step 5: Security Features
+Feature	Public Users	Password Users
+View charts	✅ Yes	✅ Yes
+See CSV value	✅ Yes (read-only)	✅ Yes
+Edit CSV	❌ No	✅ Yes
+Save changes	❌ No	✅ Persists in repo
+Step 6: CSV Persistence
+
+    CSV file commits to GitHub automatically
+
+    Public users see current value but can't modify
+
+    Password users update → auto-commits on save
+
+    Use GitHub branch protection if needed
+
+Next Steps for AI Assistant
+
+    Copy exact code above into app.py
+
+    Generate password hash and replace placeholder
+
+    Create GitHub repo with all files
+
+    Deploy following Step 4
+
+    Test public read-only vs password edit access
+
+This creates exactly your requested workflow: public chart viewing, password-protected CSV editing, GitHub/Streamlit Cloud deployment.

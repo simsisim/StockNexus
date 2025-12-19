@@ -1,2 +1,2 @@
-# StockNexus specific
-docus/
+.streamlit/secrets.toml
+__pycache__/
