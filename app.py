@@ -123,7 +123,13 @@ ticker = st.sidebar.text_input("Ticker Symbol", value=DEFAULT_TICKER).upper()
 data = load_data()
 
 # --- Public View: Analysis Dashboard ---
-st.title(f"Analysis: {ticker}")
+# Determine title (Company Name if available, else Ticker)
+if ticker in data:
+    page_title = data[ticker].get("company_name", ticker)
+else:
+    page_title = f"Analysis: {ticker}"
+    
+st.title(page_title)
 
 # Always try to scrape live data for the public view
 with st.spinner("Fetching latest data..."):
@@ -142,8 +148,13 @@ if ticker in data:
         stock = None
 
     with top_c1:
-        # Timeframe Selector
-        timeframe = st.pills("Range", ["1M", "3M", "6M", "YTD", "1Y", "3Y", "5Y"], default="1Y", selection_mode="single")
+        # Controls Row
+        ctrl_c1, ctrl_c2 = st.columns([3, 1])
+        with ctrl_c1:
+            # Timeframe Selector (Hidden Label)
+            timeframe = st.pills("Timeframe", ["1M", "3M", "6M", "YTD", "1Y", "3Y", "5Y"], default="1Y", selection_mode="single", label_visibility="collapsed")
+        with ctrl_c2:
+            show_candles = st.toggle("Candlestick", value=False)
         
         # Map to yfinance periods
         period_map = {
@@ -163,9 +174,19 @@ if ticker in data:
 
                 if not hist.empty:
                     fig = go.Figure()
-                    fig.add_trace(go.Scatter(x=hist.index, y=hist['Close'], mode='lines', name='Close'))
+                    if show_candles:
+                        fig.add_trace(go.Candlestick(x=hist.index,
+                                        open=hist['Open'],
+                                        high=hist['High'],
+                                        low=hist['Low'],
+                                        close=hist['Close'],
+                                        name='OHLC'))
+                        fig.update_layout(xaxis_rangeslider_visible=False)
+                    else:
+                        fig.add_trace(go.Scatter(x=hist.index, y=hist['Close'], mode='lines', name='Close'))
+                    
                     fig.update_layout(
-                        height=400, # Increased height
+                        height=400, 
                         margin=dict(l=0, r=0, t=10, b=0),
                         xaxis_title=None,
                         yaxis_title=None
@@ -231,7 +252,7 @@ if ticker in data:
     
     # --- Column 1: Segments & Customers ---
     with col1:
-        st.subheader(t_data.get("company_name", ticker))
+        # Removed subheader as it is now the main title
         
         # Segment 1
         with st.container(border=True):
